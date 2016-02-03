@@ -26,7 +26,8 @@ def generatePosDict(nrOfNodes, ofType = "square grid"):
             posDict[nodeIndex] = (np.random.random_sample(), np.random.random_sample())
             nodeIndex = nodeIndex + 1
 
-                    
+
+            
     return posDict
 
 

@@ -118,6 +118,39 @@ def connectNodes(Graph):
                     # print "exit 5"
                     Graph.add_edge(n, m)
 
+
+def nodeDegreePoisson(avg = 3):
+    """
+    Determines the degree of a node according to a simple Poisson distribution.
+
+    Parameters
+    ----------
+    avg : int
+          The average node degree
+
+    Math
+    ----
+    P(k events in interval) = lambda^k * exp(-lambda)/k!
+    """
+    return np.random.poisson(avg)
+
+def powerLaw(k, exp):
+    return 1.0/(k**exp)
+
+
+def inversePowerLawList(exponent, maximum = 20):
+    k = 1e8
+    l= []
+    for i in xrange(1, maximum):
+        val = int(k*powerLaw(i, exponent))
+        for n in xrange(val):
+            l.append(i)
+
+    return l
+
+def inversePowerLawDistribution(powerLawList):
+    return powerLawList[np.random.randint(1, len(powerLawList))]
+
                     
 def assignFlowsToEdges(Graph, flows):
     """
@@ -127,3 +160,52 @@ def assignFlowsToEdges(Graph, flows):
     for n, m in Graph.edges_iter():
         Graph[n][m]['flow'] = flows[i]
         i = i + 1
+
+
+def squareGrid(numberOfNodes):
+    posDict = generatePosDict(numberOfNodes, ofType = 'square grid')
+    edgeTouples = generateEdgeTouples(posDict, accordingToRule = "square grid")
+    G = nx.Graph()
+    G.add_nodes_from(posDict.keys())
+    G.add_edges_from(edgeTouples)
+    nx.set_node_attributes(G, 'pos', posDict)
+
+    return G
+
+def randomGeometric(numberOfNodes, nodeDegreeDistribution = 'poisson'):
+    posDict = generatePosDict(numberOfNodes, ofType = 'random geometric')
+    G = nx.Graph()
+    G.add_nodes_from(posDict.keys())
+    nx.set_node_attributes(G, 'pos', posDict)
+    print 'Populated graph with nodes'
+    
+    nodeDegree = {}
+    dist = {}
+    for node in G.nodes():
+        dist[node] = findDistanceToNeighbours(node, posDict)
+
+    print 'Calculated distances'
+    
+    if nodeDegreeDistribution == 'power law':
+        pl25 = inversePowerLawList(2.5)
+    for node in G.nodes():
+        if nodeDegreeDistribution == 'poisson':
+            nodeDegree[node] = nodeDegreePoisson(avg = 3)
+        elif nodeDegreeDistribution == 'power law':
+            nodeDegree[node] = inversePowerLawDistribution(pl25)
+   
+    print 'Assigned node degrees according to a %s distribution' % nodeDegreeDistribution
+
+    nx.set_node_attributes(G, 'dists', dist)
+    nx.set_node_attributes(G, 'node degree', nodeDegree)
+    connectNodes(G)
+
+    print 'Attempted to connect nodes to nearest neighbors'
+
+    return G
+
+
+
+    
+
+    

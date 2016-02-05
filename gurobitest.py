@@ -8,21 +8,34 @@ ntwk = gb.Model('3-node network')
 #################################
 # Adding variables to the model #
 #################################
+# -- Giving infinity a better name --
+inf = gb.GRB.INFINITY
 
 # -- Adding the flows --
-F12 = ntwk.addVar(name = 'flow 1->2')
-F13 = ntwk.addVar(name = 'flow 1->3')
-F23 = ntwk.addVar(name = 'flow 2->3')
+F12 = ntwk.addVar(lb = -inf, ub = inf, name = 'flow 1->2')
+F13 = ntwk.addVar(lb = -inf, ub = inf, name = 'flow 1->3')
+F23 = ntwk.addVar(lb = -inf, ub = inf, name = 'flow 2->3')
 
 # -- Adding the mismatches --
 mm1 = ntwk.addVar(name = 'mismatch in node 1')
 mm2 = ntwk.addVar(name = 'mismatch in node 2')
 mm3 = ntwk.addVar(name = 'mismatch in node 3')
 
-# -- Adding the balance that results from the flow --
-mm1_new = ntwk.addVar(name = 'balance after flow in node 1')
-mm2_new = ntwk.addVar(name = 'balance after flow in node 2')
-mm3_new = ntwk.addVar(name = 'balance after flow in node 3')
+mm1 = 6
+mm2 = -9
+mm3 = -6
+
+# -- Adding the balancing --
+b1 = ntwk.addVar(lb = -inf, ub = inf, name = 'balance in node 1')
+b2 = ntwk.addVar(lb = -inf, ub = inf, name = 'balance in node 2')
+b3 = ntwk.addVar(lb = -inf, ub = inf, name = 'balance in node 3')
+
+# -- Adding the injection patterns --
+ip1 = ntwk.addVar(lb = -inf, ub = inf, name = 'node 1 injection pattern')
+ip2 = ntwk.addVar(lb = -inf, ub = inf, name = 'node 2 injection pattern')
+ip3 = ntwk.addVar(lb = -inf, ub = inf, name = 'node 3 injection pattern')
+
+
 
 # -- Remember to update the model after adding variables --
 ntwk.update()
@@ -32,39 +45,37 @@ ntwk.update()
 # Adding the equations by hand #
 ################################
 
-# -- Setting the objective --
-# We want to minimize the sum of squared flows, since this corresponds to
-# getting flows according to Kirchoff-rules.
-ntwk.setObjective(F12*F12 + F13*F13 + F23*F23, sense = gb.GRB.MINIMIZE)
+# -- Adding step 1 objective function --
+ntwk.setObjective(b1*b1 + b2*b2 + b3*b3, sense = gb.GRB.MINIMIZE)
 
-# -- Adding linear flow constraints --
-ntwk.addConstr(mm1 - mm1_new == F12 + F13, name = 'node 1')
-ntwk.addConstr(mm2 - mm2_new == -F12 + F23, name = 'node 2')
-ntwk.addConstr(mm3 - mm3_new == -F13 - F23, name = 'node 3')
-mm1 = 6.0
-mm2 = -6.0
-mm3 = -9.0
-# -- Adding linear constraints on the balance --
-# These constraints set the initial values for the mismatches
-#ntwk.addConstr(mm1 == 6, name = 'value of mismatch in node 1')
-#ntwk.addConstr(mm2 == -6, name = 'value of mismatch in node 2')
-#ntwk.addConstr(mm3 == -9, name = 'value of mismatch in node 3')
+# -- Adding step 1 constraints --
+ntwk.addConstr(b1 + ip1 == mm1)
+ntwk.addConstr(b2 + ip2 == mm2)
+ntwk.addConstr(b3 + ip3 == mm3)
 
-# This particular constraint causes the flow to be localized
-#ntwk.addConstr(mm1 + mm2 + mm3 == mm1_new + mm2_new + mm3_new, name = 'mismatch')
-ntwk.addConstr(F12 <= -1, name = 'flow larger than one')
-#ntwk.addConstr(F23 <= -1, name = 'flow smaller than one')
+ntwk.addConstr(ip1 + ip2 + ip3 == 0)
 
-##################
-# Ready to solve #
-##################
-ntwk.params.DualReductions = 0
 ntwk.optimize()
-if ntwk.Status == gb.GRB.OPTIMAL:
-    vars = ntwk.getVars()
-    for v in vars:
-        print v
-else:
-    ntwk.computeIIS()
-    ntwk.write('ntwk.ilp')
+
+# -- Adding step 2 objective function --
+ntwk.setObjective(F12*F12 + F23*F23 + F13*F13, sense = gb.GRB.MINIMIZE)
+
+# -- Assigning values --
+ip1 = ntwk.getVarByName('node 1 injection pattern').X
+ip2 = ntwk.getVarByName('node 2 injection pattern').X
+ip3 = ntwk.getVarByName('node 3 injection pattern').X
+
+ntwk.update()
+
+# -- Adding step 2 constraints --
+ntwk.addConstr(F12 + F13 == ip1)
+ntwk.addConstr(-F12 + F23 == ip2)
+ntwk.addConstr(-F13 - F23 == ip3)
+
+ntwk.optimize()
+print ntwk.getVarByName('flow 1->2').X
+print ntwk.getVarByName('flow 1->3').X
+print ntwk.getVarByName('flow 2->3').X
+
+
 

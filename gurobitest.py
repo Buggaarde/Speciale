@@ -49,11 +49,11 @@ ntwk.update()
 ntwk.setObjective(b1*b1 + b2*b2 + b3*b3, sense = gb.GRB.MINIMIZE)
 
 # -- Adding step 1 constraints --
-ntwk.addConstr(b1 + ip1 == mm1)
-ntwk.addConstr(b2 + ip2 == mm2)
-ntwk.addConstr(b3 + ip3 == mm3)
+ntwk.addConstr(b1 + ip1 == mm1, name = 'balance in node 1 + node 1 injection pattern = mismatch in node 1')
+ntwk.addConstr(b2 + ip2 == mm2, name = 'balance in node 2 + node 2 injection pattern = mismatch in node 2')
+ntwk.addConstr(b3 + ip3 == mm3, name = 'balance in node 3 + node 3 injection pattern = mismatch in node 3')
 
-ntwk.addConstr(ip1 + ip2 + ip3 == 0)
+ntwk.addConstr(ip1 + ip2 + ip3 == 0, name = 'node 1 injection pattern + node 2 injection pattern + node 3 injection pattern = 0')
 
 ntwk.optimize()
 
@@ -68,14 +68,19 @@ ip3 = ntwk.getVarByName('node 3 injection pattern').X
 ntwk.update()
 
 # -- Adding step 2 constraints --
-ntwk.addConstr(F12 + F13 == ip1)
-ntwk.addConstr(-F12 + F23 == ip2)
-ntwk.addConstr(-F13 - F23 == ip3)
+ntwk.addConstr(F12 + F13 == ip1, name = 'flow 1->2 + flow 1->3 = %2.2f' % ip1)
+ntwk.addConstr(-F12 + F23 == ip2, name = ' - flow 1->2 + flow 2->3 = %2.2f' % ip2)
+ntwk.addConstr(-F13 - F23 == ip3, name = ' - flow 1->3 - flow 2->3 = %2.2f' % ip3)
 
 ntwk.optimize()
-print ntwk.getVarByName('flow 1->2').X
-print ntwk.getVarByName('flow 1->3').X
-print ntwk.getVarByName('flow 2->3').X
+
+print 'Variables of the model:'
+for var in ntwk.getVars():
+    print var.VarName
+print
+print 'Constraints of the model:'
+for constr in ntwk.getConstrs():
+    print constr.ConstrName
 
 
 

@@ -1,0 +1,3 @@
+[submodule "emergency_backup"]
+	path = emergency_backup
+	url = https://github.com/Frootylicious/emergency_backup.git

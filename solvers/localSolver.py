@@ -370,8 +370,8 @@ def localSolver(Graph, verbose = 0):
 
 if __name__ == '__main__':
     ntwk = nx.Graph()    
-    ntwk = nx.powerlaw_cluster_graph(50, 3, 0.2)
-    steps = 2
+    ntwk = nx.powerlaw_cluster_graph(1000, 3, 0.2)
+    steps = 10
     for node in ntwk.nodes():
         ntwk.node[node]['Mismatch'] = np.random.randn(steps) - 0.5
         ntwk.node[node]['Balance'] = np.zeros(steps)
@@ -383,7 +383,7 @@ if __name__ == '__main__':
         if totMis > 0:
             ntwk.node[0]['Mismatch'][step] -= totMis*1.1
 
-    localSolver(ntwk, verbose=1)
+    localSolver(ntwk, verbose=0)
     
     # print(ntwk.edges(data=True))
     # print(ntwk.nodes(data=True))

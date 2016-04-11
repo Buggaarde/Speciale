@@ -342,7 +342,7 @@ def syncSolver(Graph, verbose = 0):
 
 if __name__ == '__main__':
     
-    S = nx.powerlaw_cluster_graph(300, 3, 0.2)
+    S = nx.powerlaw_cluster_graph(1000, 3, 0.2)
     #nx.draw(S)
     #plt.show()
     steps = 10

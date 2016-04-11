@@ -23,18 +23,18 @@ def local_solver(Graph, verbose = 0):
     #@timing
     def _step1AddFlowVars(Graph):
         """
-        Adding flow variables to the gurobi model. Adds flows from node m->n if m<n and the
-        (m, n)'th position in the adjacency matrix of Graph is non-zero.
-        Only adds flows from m->n and not n->m because direction in this model is shown by a 
-        sign difference, but otherwise the Graph is not directed.
-        Initializes the 'flow' attributes of the edges of Graph to be zero.
-        """
+        Adding flow variables to the gurobi model. 
         
-        # -- Adding flow variables to the model --
-        # for node in Graph.nodes_iter():
-        #     for (m, n) in Graph.edges_iter():
-        #         if m < n:
-        #             ntwk.addVar(name = 'flow %d->%d' % (m, n), lb = -inf, ub = inf)
+        Adds flows from node m->n if m<n and the (m, n)'th position in the adjacency matrix
+        of Graph is non-zero. Only adds flows from m->n and not n->m because direction
+        in this model is shown by a sign difference, but otherwise the Graph is not directed.
+
+        Initializes the 'flow' attributes of the edges of Graph to be zero.
+        
+        Parameters
+        ----------
+        Graph : NetworkX Graph
+        """
         
         adjacency = nx.adjacency_matrix(Graph).todense()
         #print adjacency
@@ -44,17 +44,21 @@ def local_solver(Graph, verbose = 0):
                     if row < col:
                         ntwk.addVar(name = 'flow %d->%d' % (row, col), lb = -inf, ub = inf)
         ntwk.update()
-        
 
         # -- Initializing the 'flow' atribute of the edges to be 0 --
         for (m, n) in Graph.edges_iter():
             Graph[m][n]['flow'] = np.zeros(len(Graph.node[0]['Mismatch']))
         
-    #@timing
     def _step1AddBalMisInjLoadVars(Graph):
         """
-        Adds backup, curtailment, mismatch and injection pattern variables to the gurobi model, 
-        and names them accordingly.
+        Adds backup, curtailment, mismatch and injection pattern variables to the gurobi
+        model, and names them accordingly.
+
+        Initializes the 'Balance' and 'Mismatch' attributes of the nodes of Graph to be zero.
+        
+        Parameters
+        ----------
+        Graph : NetworkX Graph
         """
         
         for node in Graph.nodes_iter():
@@ -63,8 +67,6 @@ def local_solver(Graph, verbose = 0):
             b = ntwk.addVar(name='b%d' % (node), lb=-inf, ub=inf)
             ntwk.update()
             ntwk.addConstr(b == back + c, name='b%d = back%d + c%d' % (node, node, node))
-            # ntwk.addConstr(back <= 0, name='back%d <= 0' % (node))
-            # ntwk.addConstr(c >= 0, name='c%d >= 0' % (node))
             ntwk.addVar(name = 'mm' + str(node), lb = -inf, ub = inf) # mismatch
             ntwk.addVar(name = 'ip%d' % node, lb = -inf, ub = inf) # injection pattern
             ntwk.addVar(name = 'l%d' % node, lb = -inf, ub = inf)  # load
@@ -74,54 +76,27 @@ def local_solver(Graph, verbose = 0):
             Graph.node[node]['Balance'] = np.zeros(len(Graph.node[0]['Mismatch']))
             Graph.node[node]['Injection Pattern'] = np.zeros(len(Graph.node[0]['Mismatch']))
         
-    # #@timing    
-    # def _step1LoadGraphLoads(Graph, step = 0):
-    #     """
-    #     Loads the 'load' attribute fomr the nodes of Graph into the gurobi model.
-    #     """
-    #     for node in Graph.nodes():
-            
-    #         if step == 0:
-    #             ntwk.addConstr
-        
-        
-    #@timing    
-    def _step1UpdateMismatchLoadOLD(Graph, step = 0):
-        """
-        Loads the 'mismatch' attributes from the nodes of Graph into the gurobi model.
-        """
-        
-        for node in Graph.nodes():
-            mm = ntwk.getVarByName('mm%d' % node)
-            l = ntwk.getVarByName('l%d' % node)
-            if step == 0:
-                ntwk.addConstr(mm == Graph.node[node]['Mismatch'][step],\
-                               name = 'mm%d = %2.2f' % (node, Graph.node[node]['Mismatch'][step]))
-                ntwk.addConstr(l == Graph.node[node]['Load'][step],\
-                               name = 'l%d = %2.2f' % (node, Graph.node[node]['Load'][step]))
-            else:
-                ntwk.remove(ntwk.getConstrByName('mm%d = %2.2f'\
-                                                 % (node, Graph.node[node]['Mismatch'][step - 1])))
-                ntwk.addConstr(mm == Graph.node[node]['Mismatch'][step],\
-                               name = 'mm%d = %2.2f' % (node, Graph.node[node]['Mismatch'][step]))
-                ntwk.remove(ntwk.getConstrByName('l%d = %2.2f'\
-                                                 % (node, Graph.node[node]['Load'][step - 1])))
-                ntwk.addConstr(l == Graph.node[node]['Load'][step],\
-                               name = 'l%d = %2.2f' % (node, Graph.node[node]['Load'][step]))
-        ntwk.update()
-
-    #@timing
     def _step1UpdateMismatchLoad(Graph, step = 0):
         """
+        Makes the model aware of the provided values for mismatch and load.
+
         If step = 0 this function adds the mismatch and load constraints, which basically
-        just tells the model the known values for the mismatch and load.
-        If step is any other than the first one, this function only updates the values of the rhs
-        of the constraints, which is MUCH faster than removing the constraint and then re-adding 
-        it with the new rhs-values.
-        """
+        just tells the model the provided values for the mismatch and load.
+
+        If step != 0, this function only updates the values of the rhs of the constraints,
+        which is MUCH faster than removing the constraint and then re-adding it with
+        the new rhs-values.
         
+        Parameters
+        ----------
+        Graph : NetworkX Graph
+
+        step : int
+            The step in the provided timeseries. If, for example, the timeseries has hourly
+            data, step would be the hour currently looked at by the solver.
+        """
         for node in Graph.nodes():
-            if step == 0:
+            if step == 0: # Add variables and constraints to the Gurobi model
                 mm = ntwk.getVarByName('mm%d' % node)
                 l = ntwk.getVarByName('l%d' % node)
                 mmConstr = ntwk.addConstr(mm == Graph.node[node]['Mismatch'][step],\
@@ -129,26 +104,27 @@ def local_solver(Graph, verbose = 0):
                 
                 loadConstr = ntwk.addConstr(l == Graph.node[node]['Load'][step],\
                                name = 'l%d = load in node %d' % (node, node))                
-            else:
+            else: # Update the rhs of the constraints
                 mmConstr = ntwk.getConstrByName('mm%d = mismatch in node %d' % (node, node))
                 loadConstr = ntwk.getConstrByName('l%d = load in node %d' % (node, node))
 
                 mmConstr.rhs = Graph.node[node]['Mismatch'][step]
                 loadConstr.rhs = Graph.node[node]['Load'][step]
-
         ntwk.update()
         
-    #@timing
     def _step1RemoveMismatchConstraints(Graph, step = 0):
         for node in Graph.nodes_iter():
-            ntwk.remove(ntwk.getConstrByName('mm%d = %2.2f' % (node, Graph.node[node]['Mismatch'][step])))
+            ntwk.remove(ntwk.getConstrByName('mm%d = %2.2f' \
+                                             % (node, Graph.node[node]['Mismatch'][step])))
         
-    #@timing    
     def _step1AddMismatchConstraints(Graph):
         """
         Tells the model that  balance + injection pattern = mismatch  in each node.
-        """
         
+        Parameters
+        ----------
+        Graph : NetworkX Graph
+        """
         for node in Graph.nodes_iter():
             balance = ntwk.getVarByName('b' + str(node))
             injPat = ntwk.getVarByName('ip%d' % node)            
@@ -157,112 +133,142 @@ def local_solver(Graph, verbose = 0):
                            injPat.VarName + ' = ' + mismatch.VarName)
         ntwk.update()
 
-    #@timing
     def _step1AddInjectionConstraints(Graph):
-        
+        """
+        Tells the model to have a balanced injection pattern, which is to say
+        sum of injection patterns must equal zero.
+
+        Parameters
+        ----------
+        Graph : NetworkX Graph
+        """
         injSum = gb.LinExpr()
         for node in Graph.nodes_iter():
             term = ntwk.getVarByName('ip%d' %node)
             injSum.add(term)
         ntwk.addConstr(injSum == 0, name = 'sum of ip\'s = 0')
         ntwk.update()
-
-    #@timing
-    def _step1GetObj(Graph, step):
-        backupSum = gb.LinExpr()
-        for node in Graph.nodes():
-            backup = ntwk.getVarByName('back%d' % (node))
-            backupSum.add(-backup)
-        return backupSum
-            
-    #@timing
-    def _step1SetObjectiveFunction(Graph):
-        
-        balanceSquareSum = gb.QuadExpr()
-        for node in Graph.nodes():
-            term = ntwk.getVarByName('b' + str(node))
-            balanceSquareSum.add(term*term)
-        ntwk.setObjective(balanceSquareSum, sense = gb.GRB.MINIMIZE)
-        ntwk.update()
-                    
             
     def _step2AddBackupConstraint(Graph, step):
+        """
+        Because the step 1 minimization is unnecessary for the local flowscheme, (since
+        the minimum sum of balances is just the sum of injection patterns,) that stepped in 
+        instead replaced by a constraint telling the model that the sum of balances has to
+        equal the sum of injection patterns.
+
+        If step = 0 the constraint is added to the model, and if step != 0 the rhs of the
+        constraint is instead updated, which is much faster than removing the constraint
+        and adding it again with a new rhs.
+
+        Parameters
+        ----------
+        Graph : NetworkX Graph
+
+        step : int
+            The step in the provided timeseries. If, for example, the timeseries has hourly
+            data, step would be the hour currently looked at by the solver.
+        """
         backupSum = gb.LinExpr()
         backupTargetValue = 0
-        for node in Graph.nodes_iter():
+        for node in Graph.nodes_iter(): # Find the sum of mismatches
             backupSum.add(ntwk.getVarByName('back%d' % node))
             backupTargetValue += Graph.node[node]['Mismatch'][step]
-        # print backupTargetValue
             
-        if step == 0:
+        if step == 0: # Add constraint to the Gurobi model
             ntwk.addConstr(backupSum == backupTargetValue,
                            name='step1 objective, sum of backups = sum of mismatches')
-        else:
-            ntwk.getConstrByName('step1 objective, sum of backups = sum of mismatches').rhs = backupTargetValue
+        else: # Update the rhs of the constraint
+            ntwk.getConstrByName('step1 objective, sum of backups = sum of mismatches').rhs\
+                = backupTargetValue
         ntwk.update()
         
-    #@timing
     def _step2AddFlowConstraints(Graph, step = 0):
         """
-        Kirchoff's laws
+        Kirchoff's laws. The sum of all flows in or out of a node must equal the injection
+        in that node.
+        
+        Adds the above as constraints to the Gurobi model.
+
+        Parameters
+        ----------
+        Graph : NetworkX Graph
+
+        step : int
+            The step in the provided timeseries. If, for example, the timeseries has hourly
+            data, step would be the hour currently looked at by the solver.
         """
         for node in Graph.nodes_iter():
-            ip = ntwk.getVarByName('ip%d' % node)
-            if step == 0:
-                flowSum = gb.LinExpr()                
-                for neighbor in Graph.neighbors_iter(node):
-                    if node < neighbor:
-                        f = ntwk.getVarByName('flow %d->%d' % (node, neighbor))
-                        flowSum.add(f)
-                    elif neighbor < node:
-                        f = ntwk.getVarByName('flow %d->%d' % (neighbor, node))
-                        flowSum.add(-f)
-                ntwk.addConstr(flowSum == ip, name = 'flows from node %d = ip%d' %(node, node))
-            else:
-                # flowConstr = ntwk.getConstrByName('flows from node %d = ip%d' %(node, node))
-                # flowConstr.rhs = ip
-                pass
-                    
+            ip = ntwk.getVarByName('ip%d' % node) # The injection pattern
+            flowSum = gb.LinExpr()                # The sum of flows in a node
+            for neighbor in Graph.neighbors_iter(node):
+                if node < neighbor:
+                    f = ntwk.getVarByName('flow %d->%d' % (node, neighbor))
+                    flowSum.add(f)
+                elif neighbor < node:
+                    f = ntwk.getVarByName('flow %d->%d' % (neighbor, node))
+                    flowSum.add(-f)
+            ntwk.addConstr(flowSum == ip, name = 'flows from node %d = ip%d' %(node, node))
 
-    #@timing
-    def _step1UpdateFlowConstraints(Graph, step = 0):
-        for node in Graph.nodes():
-            flowConstr = ntwk.getConstrByName('flows from node %d = ip%d' % (node, node))
-            flowConstr.rhs = 0
-
-
-    #@timing
     def _step2GetObj(Graph):
+        """
+        Tells the model to minimize the sum of square flows. 
+        For unconstrained flows, this is the same as finding the flows in the DC approximation.
+        
+        The objective is calculated only once, in order to be more efficient.
+
+        Parameters
+        ----------
+        Graph : NetworkX Graph
+        """
         flowSquareSum = gb.QuadExpr()
         for (m, n) in Graph.edges_iter():
-            flow = ntwk.getVarByName('flow ' + str(m) + '->' + str(n))
+            flow = ntwk.getVarByName('flow %d->%d' % (m, n))
             flowSquareSum.add(flow*flow)
         return flowSquareSum
             
-    #@timing
-    def _step2SetObjectiveFunction(Graph):
-        
-        flowSquareSum = gb.QuadExpr()
-        for (m, n) in Graph.edges_iter():
-            flow = ntwk.getVarByName('flow ' + str(m) + '->' + str(n))
-            flowSquareSum.add(flow*flow)
-        ntwk.setObjective(flowSquareSum, sense = gb.GRB.MINIMIZE)
-        ntwk.update()
-        
-    #@timing
     def _AddBalInjToGraph(Graph, step = 0):
+        """
+        Adds the calculated injection pattern and balances to Graph as node attributes.
+
+        Parameters
+        ----------
+        Graph : NetworkX Graph
+
+        step : int
+            The step in the provided timeseries. If, for example, the timeseries has hourly
+            data, step would be the hour currently looked at by the solver.
+        """
         for node in Graph.nodes_iter():
-            #print ntwk.getVarByName('ip%d' % node)
             Graph.node[node]['Injection Pattern'][step] = ntwk.getVarByName('ip%d' % node).X
             Graph.node[node]['Mismatch'][step] = ntwk.getVarByName('mm%d' % node).X
-            Graph.node[node]['Balance'][step] = Graph.node[node]['Mismatch'][step] - Graph.node[node]['Injection Pattern'][step]
+            Graph.node[node]['Balance'][step] = Graph.node[node]['Mismatch'][step] \
+                                                - Graph.node[node]['Injection Pattern'][step]
             
-    #@timing
     def _AddFlowsToGraph(Graph, step):
+        """
+        Adds the calculated flows to Graph as edge attributes.
+
+        Parameters
+        ----------
+        Graph : NetworkX Graph
+
+        step : int
+            The step in the provided timeseries. If, for example, the timeseries has hourly
+            data, step would be the hour currently looked at by the solver.
+        """
         for (m, n) in Graph.edges_iter():
             Graph[m][n]['flow'][step] = ntwk.getVarByName('flow %d->%d' % (m, n)).X
 
     def _printEverything(message):
+        """
+        A helper function useful in debugging circumstances.
+
+        Parameters
+        ----------
+        message: string
+            The string you want to be displayed above all the variables and constraints
+            in order to be able to tell apart all the information.
+        """
         print message
         for var in ntwk.getVars():
             print var
@@ -270,53 +276,30 @@ def local_solver(Graph, verbose = 0):
             print constr, constr.rhs
         print
 
-
-    
-    #print 'number of mismatches: %d ' % len(Graph.node[0]['Mismatch'])
     totalSteps = len(Graph.node[0]['Mismatch'])
-    sstart = timeit.default_timer()
     for step in xrange(totalSteps):
-        start = timeit.default_timer()
-        #sys.stdout.write('%s\r' % ('Step %d of %d' % (step + 1, totalSteps)))
-        #print '--------------------STEP %d of %d--------------------\r' % (step + 1, totalSteps)
         if step == 0:
-            # -- Step 1 --
+            # -- Setting up the gurobi model --
             ntwk = gb.Model('Network')
-            #ntwk.params.DualReductions = 0
-            ntwk.params.OutputFlag = 0
+            # ntwk.params.DualReductions = 0 # Makes the solver specifiy
+                                           # whether error is unbound or infeasible
+            ntwk.params.OutputFlag = 0     # Tells Gurobi to shut up 
             # -- Giving infinity a better name --
             inf = gb.GRB.INFINITY
 
+            # -- Step 1 --
             _step1AddFlowVars(Graph)
             _step1AddBalMisInjLoadVars(Graph)
-            
             _step1UpdateMismatchLoad(Graph, step)
             _step1AddMismatchConstraints(Graph)
-            
             _step1AddInjectionConstraints(Graph)
-            
-            
-            # step1Obj = _step1GetObj(Graph, step)
-            # ntwk.setObjective(step1Obj)
-            # _printEverything('')
-            # ntwk.optimize()
-            # if ntwk.status != gb.GRB.OPTIMAL:
-                # print(ntwk.status)
-                # ntwk.computeIIS()
-                # ntwk.write('model.ilp')
-                # print 'Wrote to model.ilp'
-            # _printEverything('')
-            # _AddBalInjToGraph(Graph)
-            
                 
             # -- Step 2 --
             _step2AddBackupConstraint(Graph, step) # instead of minimizing the sum of backups
             _step2AddFlowConstraints(Graph)
             step2Obj = _step2GetObj(Graph)
-            # _printEverything('')
             ntwk.setObjective(step2Obj)
             ntwk.optimize()
-            # _printEverything('')
             _AddBalInjToGraph(Graph, step)
             _AddFlowsToGraph(Graph, step)
             
@@ -327,18 +310,10 @@ def local_solver(Graph, verbose = 0):
                 print 'Wrote to model.ilp'
         else:
             # -- Step 1 --
-            # _step1UpdateFlowConstraints(Graph, step)
             _step1UpdateMismatchLoad(Graph, step)
-
-
-            # _printEverything('')
-            # ntwk.setObjective(step1Obj)
-            # ntwk.optimize()
-            # _AddBalInjToGraph(Graph, step)
             
             # -- Step 2 --
             _step2AddBackupConstraint(Graph, step) # instead of minimizing the sum of backups
-            # _step2AddFlowConstraints(Graph, step)
             ntwk.setObjective(step2Obj)
             ntwk.optimize()
             _AddBalInjToGraph(Graph, step)
@@ -347,14 +322,6 @@ def local_solver(Graph, verbose = 0):
                 ntwk.computeIIS()
                 ntwk.write('model.ilp')
                 print 'Wrote to model.ilp'
-        end = timeit.default_timer()
-        #sys.stdout.write('time to run step %d of %d: %3.1f sec\r' % ((step + 1), totalSteps, (end - sstart)))
-    #print '\nAverage time pr step: %f' % ((end - sstart)/totalSteps)
-    
-
-    # for constr in ntwk.getConstrs():
-    #     print '%s = %s' % (constr.ConstrName, constr.rhs)
-        
     
     if verbose == 1:
         for step in xrange(len(Graph.node[0]['Mismatch'])):
@@ -385,7 +352,7 @@ if __name__ == '__main__':
         ntwk.node[node]['Mismatch'] = np.random.randn(steps) - 0.25
         ntwk.node[node]['Load'] = np.ones(steps)
 
-    # Reduces the mismatch of node 0 to make the total negative, if need be.
+    # Adjusts the mismatch of node 0 to make the total negative, if need be.
     for step in xrange(steps):
         totMis = sum(ntwk.node[node]['Mismatch'][step] for node in ntwk.nodes())
         if totMis > 0:

@@ -10,3 +10,9 @@ data/
 *.ilp
 */*.ilp
 data/*
+*.lp
+*.sol
+/*.npy
+/*.npy
+/settings/adjacency.txt.npy
+/settings/*

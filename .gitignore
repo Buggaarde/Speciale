@@ -1,2 +1,12 @@
 *.pyc
 *.log
+*.npz
+*.pdf
+*.ipynb
+.npz
+/*.npz
+data/
+*/*.npz
+*.ilp
+*/*.ilp
+data/*

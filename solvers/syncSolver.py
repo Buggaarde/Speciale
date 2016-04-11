@@ -18,7 +18,7 @@ def timing(f):
 
 
 @timing
-def localSolver(Graph, verbose = 0):
+def syncSolver(Graph, verbose = 0):
     
     #@timing
     def _step1AddFlowVars(Graph):
@@ -51,25 +51,20 @@ def localSolver(Graph, verbose = 0):
         # -- Initializing the 'flow' atribute of the edges to be 0 --
         for (m, n) in Graph.edges_iter():
             Graph[m][n]['flow'] = np.zeros(len(Graph.node[0]['Mismatch']))
+        end = timeit.default_timer()
         
     #@timing
     def _step1AddBalMisInjLoadVars(Graph):
         """
-        Adds backup, curtailment, mismatch and injection pattern variables to the gurobi model, 
-        and names them accordingly.
+        Adds balance, mismatch and injection pattern variables to the gurobi model, and names them
+        accordingly.
         """
         
         for node in Graph.nodes_iter():
-            back = ntwk.addVar(name = 'back' + str(node), lb = -inf, ub = 0) # backup
-            c = ntwk.addVar(name = 'c' + str(node), lb = 0, ub = inf) # curtailment
-            b = ntwk.addVar(name='b%d' % (node), lb=-inf, ub=inf)
-            ntwk.update()
-            ntwk.addConstr(b == back + c, name='b%d = back%d + c%d' % (node, node, node))
-            # ntwk.addConstr(back <= 0, name='back%d <= 0' % (node))
-            # ntwk.addConstr(c >= 0, name='c%d >= 0' % (node))
-            ntwk.addVar(name = 'mm' + str(node), lb = -inf, ub = inf) # mismatch
-            ntwk.addVar(name = 'ip%d' % node, lb = -inf, ub = inf) # injection pattern
-            ntwk.addVar(name = 'l%d' % node, lb = -inf, ub = inf)  # load
+            ntwk.addVar(name = 'b' + str(node), lb = -inf, ub = inf)
+            ntwk.addVar(name = 'mm' + str(node), lb = -inf, ub = inf)
+            ntwk.addVar(name = 'ip%d' % node, lb = -inf, ub = inf)
+            ntwk.addVar(name = 'l%d' % node, lb = -inf, ub = inf)
         ntwk.update()
 
         
@@ -160,20 +155,23 @@ def localSolver(Graph, verbose = 0):
     #@timing
     def _step1AddInjectionConstraints(Graph):
         
+        injNames = []
         injSum = gb.LinExpr()
         for node in Graph.nodes_iter():
             term = ntwk.getVarByName('ip%d' %node)
             injSum.add(term)
+            injNames.append('ip%d' % node)
         ntwk.addConstr(injSum == 0, name = 'sum of ip\'s = 0')
         ntwk.update()
 
     #@timing
     def _step1GetObj(Graph, step):
-        backupSum = gb.LinExpr()
+        balanceSquareSum = gb.QuadExpr()
         for node in Graph.nodes():
-            backup = ntwk.getVarByName('back%d' % (node))
-            backupSum.add(-backup)
-        return backupSum
+            bal = ntwk.getVarByName('b' + str(node))
+            load = Graph.node[node]['Load'][step]
+            balanceSquareSum.add(bal*bal/load)
+        return balanceSquareSum
             
     #@timing
     def _step1SetObjectiveFunction(Graph):
@@ -186,24 +184,13 @@ def localSolver(Graph, verbose = 0):
         ntwk.update()
                     
             
-    def _step2AddBackupConstraint(Graph, step=0):
-        backupSum = gb.LinExpr()
-        backupTargetValue = 0
-        for node in Graph.nodes_iter():
-            backupSum.add(ntwk.getVarByName('back%d' % node))
-            backupTargetValue += Graph.node[node]['Mismatch'][step]
-            print backupTargetValue
-        ntwk.addConstr(backupSum == backupTargetValue,
-                       name='step1 objective, sum of backups = sum of mismatches')
-        ntwk.update()
-        
     #@timing
     def _step2AddFlowConstraints(Graph, step = 0):
         """
         Kirchoff's laws
         """
         for node in Graph.nodes_iter():
-            ip = ntwk.getVarByName('ip%d' % node)
+            ip = ntwk.getVarByName('ip%d' % node).X
             if step == 0:
                 flowSum = gb.LinExpr()                
                 for neighbor in Graph.neighbors_iter(node):
@@ -292,31 +279,23 @@ def localSolver(Graph, verbose = 0):
             _step1AddInjectionConstraints(Graph)
             
             
-            # step1Obj = _step1GetObj(Graph, step)
-            # ntwk.setObjective(step1Obj)
+            step1Obj = _step1GetObj(Graph, step)
+            ntwk.setObjective(step1Obj)
+            
+            ntwk.optimize()
+            
+            _AddBalInjToGraph(Graph)
             # _printEverything('')
-            # ntwk.optimize()
-            # if ntwk.status != gb.GRB.OPTIMAL:
-                # print(ntwk.status)
-                # ntwk.computeIIS()
-                # ntwk.write('model.ilp')
-                # print 'Wrote to model.ilp'
-            # _printEverything('')
-            # _AddBalInjToGraph(Graph)
             
                 
             # -- Step 2 --
-            _step2AddBackupConstraint(Graph, step) # instead of minimizing the sum of backups
             _step2AddFlowConstraints(Graph)
             step2Obj = _step2GetObj(Graph)
             ntwk.setObjective(step2Obj)
             ntwk.optimize()
-            _printEverything('')
-            _AddBalInjToGraph(Graph, step)
             _AddFlowsToGraph(Graph, step)
             
             if ntwk.status != gb.GRB.OPTIMAL:
-                print(ntwk.status)
                 ntwk.computeIIS()
                 ntwk.write('model.ilp')
                 print 'Wrote to model.ilp'
@@ -333,7 +312,6 @@ def localSolver(Graph, verbose = 0):
             _step2AddFlowConstraints(Graph, step)
             ntwk.setObjective(step2Obj)
             ntwk.optimize()
-            _AddBalInjToGraph(Graph, step)
             _AddFlowsToGraph(Graph, step)
             if ntwk.status != gb.GRB.OPTIMAL:
                 ntwk.computeIIS()
@@ -362,22 +340,19 @@ def localSolver(Graph, verbose = 0):
                 print 'flow %d->%d: ' % (m, n) + str(S[m][n]['flow'][step])      
 
 
-
 if __name__ == '__main__':
-    ntwk = nx.Graph()    
-    ntwk.add_nodes_from([0, 1, 2])
-    ntwk.add_edges_from([(0, 1), (1, 2), (0, 2)])
-
-    ntwk.node[0]['Mismatch'] = 6*np.ones(1)
-    ntwk.node[1]['Mismatch'] = -6*np.ones(1)
-    ntwk.node[2]['Mismatch'] = -9*np.ones(1)
-    steps = 1
-    for node in ntwk.nodes():
-        ntwk.node[node]['Balance'] = np.zeros(steps)
-        ntwk.node[node]['Injection Pattern'] = np.zeros(steps)
-        ntwk.node[node]['Load'] = np.ones(steps)
-
-    localSolver(ntwk)
     
-    print(ntwk.edges(data=True))
-    print(ntwk.nodes(data=True))
+    S = nx.powerlaw_cluster_graph(300, 3, 0.2)
+    #nx.draw(S)
+    #plt.show()
+    steps = 10
+    for node in S.nodes():
+        S.node[node]['Mismatch'] = np.random.randn(steps)
+        S.node[node]['Balance'] = np.zeros(steps)
+        S.node[node]['Injection Pattern'] = np.zeros(steps)
+        S.node[node]['Load'] = 2*np.random.random(steps)
+    syncSolver(S)
+    # print S.edges(data = True)
+    
+
+    

@@ -16,11 +16,9 @@ def timing(f):
         return result
     return timed
 
-
 @timing
 def local_solver(Graph, verbose = 0):
     
-    #@timing
     def _step1AddFlowVars(Graph):
         """
         Adding flow variables to the gurobi model. 
@@ -35,9 +33,7 @@ def local_solver(Graph, verbose = 0):
         ----------
         Graph : NetworkX Graph
         """
-        
         adjacency = nx.adjacency_matrix(Graph).todense()
-        #print adjacency
         for row in xrange(len(adjacency)):
             for col in xrange(len(adjacency)):
                 if adjacency[row, col] != 0:
@@ -51,8 +47,8 @@ def local_solver(Graph, verbose = 0):
         
     def _step1AddBalMisInjLoadVars(Graph):
         """
-        Adds backup, curtailment, mismatch and injection pattern variables to the gurobi
-        model, and names them accordingly.
+        Adds backup, balance, curtailment, mismatch and injection pattern variables
+        to the gurobi model, and names them accordingly.
 
         Initializes the 'Balance' and 'Mismatch' attributes of the nodes of Graph to be zero.
         
@@ -60,7 +56,6 @@ def local_solver(Graph, verbose = 0):
         ----------
         Graph : NetworkX Graph
         """
-        
         for node in Graph.nodes_iter():
             back = ntwk.addVar(name = 'back' + str(node), lb = -inf, ub = 0) # backup
             c = ntwk.addVar(name = 'c' + str(node), lb = 0, ub = inf) # curtailment
@@ -152,7 +147,7 @@ def local_solver(Graph, verbose = 0):
     def _step2AddBackupConstraint(Graph, step):
         """
         Because the step 1 minimization is unnecessary for the local flowscheme, (since
-        the minimum sum of balances is just the sum of injection patterns,) that stepped in 
+        the minimum sum of balances is just the sum of injection patterns,) that step is  
         instead replaced by a constraint telling the model that the sum of balances has to
         equal the sum of injection patterns.
 

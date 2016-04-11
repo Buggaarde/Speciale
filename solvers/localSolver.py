@@ -183,15 +183,19 @@ def localSolver(Graph, verbose = 0):
         ntwk.update()
                     
             
-    def _step2AddBackupConstraint(Graph, step=0):
+    def _step2AddBackupConstraint(Graph, step):
         backupSum = gb.LinExpr()
         backupTargetValue = 0
         for node in Graph.nodes_iter():
             backupSum.add(ntwk.getVarByName('back%d' % node))
             backupTargetValue += Graph.node[node]['Mismatch'][step]
-            print backupTargetValue
-        ntwk.addConstr(backupSum == backupTargetValue,
-                       name='step1 objective, sum of backups = sum of mismatches')
+        # print backupTargetValue
+            
+        if step == 0:
+            ntwk.addConstr(backupSum == backupTargetValue,
+                           name='step1 objective, sum of backups = sum of mismatches')
+        else:
+            ntwk.getConstrByName('step1 objective, sum of backups = sum of mismatches').rhs = backupTargetValue
         ntwk.update()
         
     #@timing
@@ -212,9 +216,9 @@ def localSolver(Graph, verbose = 0):
                         flowSum.add(-f)
                 ntwk.addConstr(flowSum == ip, name = 'flows from node %d = ip%d' %(node, node))
             else:
-                flowConstr = ntwk.getConstrByName('flows from node %d = ip%d' %(node, node))
-                flowConstr.rhs = ip
-                
+                # flowConstr = ntwk.getConstrByName('flows from node %d = ip%d' %(node, node))
+                # flowConstr.rhs = ip
+                pass
                     
 
     #@timing
@@ -260,7 +264,7 @@ def localSolver(Graph, verbose = 0):
         for var in ntwk.getVars():
             print var
         for constr in ntwk.getConstrs():
-            print constr
+            print constr, constr.rhs
         print
 
 
@@ -306,9 +310,10 @@ def localSolver(Graph, verbose = 0):
             _step2AddBackupConstraint(Graph, step) # instead of minimizing the sum of backups
             _step2AddFlowConstraints(Graph)
             step2Obj = _step2GetObj(Graph)
+            # _printEverything('')
             ntwk.setObjective(step2Obj)
             ntwk.optimize()
-            _printEverything('')
+            # _printEverything('')
             _AddBalInjToGraph(Graph, step)
             _AddFlowsToGraph(Graph, step)
             
@@ -319,15 +324,18 @@ def localSolver(Graph, verbose = 0):
                 print 'Wrote to model.ilp'
         else:
             # -- Step 1 --
-            _step1UpdateFlowConstraints(Graph, step)
+            # _step1UpdateFlowConstraints(Graph, step)
             _step1UpdateMismatchLoad(Graph, step)
-            
-            ntwk.setObjective(step1Obj)
-            ntwk.optimize()
-            _AddBalInjToGraph(Graph, step)
+
+
+            # _printEverything('')
+            # ntwk.setObjective(step1Obj)
+            # ntwk.optimize()
+            # _AddBalInjToGraph(Graph, step)
             
             # -- Step 2 --
-            _step2AddFlowConstraints(Graph, step)
+            _step2AddBackupConstraint(Graph, step) # instead of minimizing the sum of backups
+            # _step2AddFlowConstraints(Graph, step)
             ntwk.setObjective(step2Obj)
             ntwk.optimize()
             _AddBalInjToGraph(Graph, step)
@@ -346,35 +354,36 @@ def localSolver(Graph, verbose = 0):
         
     
     if verbose == 1:
-        for step in xrange(len(S.node[0]['Mismatch'])):
+        for step in xrange(len(Graph.node[0]['Mismatch'])):
             print '-------------STEP %d-------------' % step
-            for node in S.nodes():
+            for node in Graph.nodes():
                 print 'NODE %d' % node
-                print 'mismatch: ' + str(S.node[node]['Mismatch'][step])
-                print 'balance: ' + str(S.node[node]['Balance'][step])
-                print 'injection pattern: ' + str(S.node[node]['Injection Pattern'][step])
+                print 'mismatch: ' + str(Graph.node[node]['Mismatch'][step])
+                print 'balance: ' + str(Graph.node[node]['Balance'][step])
+                print 'injection pattern: ' + str(Graph.node[node]['Injection Pattern'][step])
                 
             print
-            for(m, n) in S.edges_iter():
-                print 'flow %d->%d: ' % (m, n) + str(S[m][n]['flow'][step])      
+            for(m, n) in Graph.edges_iter():
+                print 'flow %d->%d: ' % (m, n) + str(Graph[m][n]['flow'][step])      
 
 
 
 if __name__ == '__main__':
     ntwk = nx.Graph()    
-    ntwk.add_nodes_from([0, 1, 2])
-    ntwk.add_edges_from([(0, 1), (1, 2), (0, 2)])
-
-    ntwk.node[0]['Mismatch'] = 6*np.ones(1)
-    ntwk.node[1]['Mismatch'] = -6*np.ones(1)
-    ntwk.node[2]['Mismatch'] = -9*np.ones(1)
-    steps = 1
+    ntwk = nx.powerlaw_cluster_graph(50, 3, 0.2)
+    steps = 2
     for node in ntwk.nodes():
+        ntwk.node[node]['Mismatch'] = np.random.randn(steps) - 0.5
         ntwk.node[node]['Balance'] = np.zeros(steps)
         ntwk.node[node]['Injection Pattern'] = np.zeros(steps)
         ntwk.node[node]['Load'] = np.ones(steps)
 
-    localSolver(ntwk)
+    for step in xrange(steps):
+        totMis = sum(ntwk.node[node]['Mismatch'][step] for node in ntwk.nodes())
+        if totMis > 0:
+            ntwk.node[0]['Mismatch'][step] -= totMis*1.1
+
+    localSolver(ntwk, verbose=1)
     
-    print(ntwk.edges(data=True))
-    print(ntwk.nodes(data=True))
+    # print(ntwk.edges(data=True))
+    # print(ntwk.nodes(data=True))

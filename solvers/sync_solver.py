@@ -67,6 +67,9 @@ def sync_solver(Graph, verbose = 0):
             ntwk.addVar(name = 'l%d' % node, lb = -inf, ub = inf)
         ntwk.update()
 
+        for node in Graph.nodes_iter():
+            Graph.node[node]['Balance'] = np.zeros(len(Graph.node[0]['Mismatch']))
+            Graph.node[node]['Injection Pattern'] = np.zeros(len(Graph.node[0]['Mismatch']))
         
     # #@timing    
     # def _step1LoadGraphLoads(Graph, step = 0):
@@ -325,34 +328,24 @@ def sync_solver(Graph, verbose = 0):
     # for constr in ntwk.getConstrs():
     #     print '%s = %s' % (constr.ConstrName, constr.rhs)
         
-    
     if verbose == 1:
-        for step in xrange(len(S.node[0]['Mismatch'])):
+        for step in xrange(len(Graph.node[0]['Mismatch'])):
             print '-------------STEP %d-------------' % step
-            for node in S.nodes():
+            for node in Graph.nodes():
                 print 'NODE %d' % node
-                print 'mismatch: ' + str(S.node[node]['Mismatch'][step])
-                print 'balance: ' + str(S.node[node]['Balance'][step])
-                print 'injection pattern: ' + str(S.node[node]['Injection Pattern'][step])
+                print 'mismatch: ' + str(Graph.node[node]['Mismatch'][step])
+                print 'balance: ' + str(Graph.node[node]['Balance'][step])
+                print 'injection pattern: ' + str(Graph.node[node]['Injection Pattern'][step])
                 
             print
-            for(m, n) in S.edges_iter():
-                print 'flow %d->%d: ' % (m, n) + str(S[m][n]['flow'][step])      
-
+            for(m, n) in Graph.edges_iter():
+                print 'flow %d->%d: ' % (m, n) + str(Graph[m][n]['flow'][step])      
+                
 
 if __name__ == '__main__':
-    
-    S = nx.powerlaw_cluster_graph(1000, 3, 0.2)
-    #nx.draw(S)
-    #plt.show()
-    steps = 10
-    for node in S.nodes():
-        S.node[node]['Mismatch'] = np.random.randn(steps)
-        S.node[node]['Balance'] = np.zeros(steps)
-        S.node[node]['Injection Pattern'] = np.zeros(steps)
-        S.node[node]['Load'] = 2*np.random.random(steps)
-    sync_solver(S)
-    # print S.edges(data = True)
-    
-
-    
+    ntwk = nx.powerlaw_cluster_graph(5, 3, 0.2)
+    steps = 5 
+    for node in ntwk.nodes():
+        ntwk.node[node]['Mismatch'] = np.random.randn(steps)
+        ntwk.node[node]['Load'] = np.ones(steps)
+    sync_solver(ntwk, verbose=1)

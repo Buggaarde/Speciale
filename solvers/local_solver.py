@@ -70,6 +70,9 @@ def local_solver(Graph, verbose = 0):
             ntwk.addVar(name = 'l%d' % node, lb = -inf, ub = inf)  # load
         ntwk.update()
 
+        for node in Graph.nodes_iter():
+            Graph.node[node]['Balance'] = np.zeros(len(Graph.node[0]['Mismatch']))
+            Graph.node[node]['Injection Pattern'] = np.zeros(len(Graph.node[0]['Mismatch']))
         
     # #@timing    
     # def _step1LoadGraphLoads(Graph, step = 0):
@@ -367,15 +370,11 @@ def local_solver(Graph, verbose = 0):
                 print 'flow %d->%d: ' % (m, n) + str(Graph[m][n]['flow'][step])      
 
 
-
 if __name__ == '__main__':
-    ntwk = nx.Graph()    
-    ntwk = nx.powerlaw_cluster_graph(1000, 3, 0.2)
-    steps = 10
+    ntwk = nx.powerlaw_cluster_graph(5, 3, 0.2)
+    steps = 5
     for node in ntwk.nodes():
-        ntwk.node[node]['Mismatch'] = np.random.randn(steps) - 0.5
-        ntwk.node[node]['Balance'] = np.zeros(steps)
-        ntwk.node[node]['Injection Pattern'] = np.zeros(steps)
+        ntwk.node[node]['Mismatch'] = np.random.randn(steps) - 0.25
         ntwk.node[node]['Load'] = np.ones(steps)
 
     for step in xrange(steps):
@@ -383,7 +382,4 @@ if __name__ == '__main__':
         if totMis > 0:
             ntwk.node[0]['Mismatch'][step] -= totMis*1.1
 
-    local_solver(ntwk, verbose=0)
-    
-    # print(ntwk.edges(data=True))
-    # print(ntwk.nodes(data=True))
+    local_solver(ntwk, verbose=1)

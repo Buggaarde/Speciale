@@ -343,6 +343,12 @@ def sync_solver(Graph, verbose = 0):
                 
 
 if __name__ == '__main__':
+    """
+    The mismatches are randomly chosen from a normal distribution, in the example below.
+
+    The loads in this basic example are chosen to be 1 in order to quickly be able to
+    verify the results.
+    """
     ntwk = nx.powerlaw_cluster_graph(5, 3, 0.2)
     steps = 5 
     for node in ntwk.nodes():

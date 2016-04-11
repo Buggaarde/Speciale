@@ -91,6 +91,10 @@ mu = mu2 + sigma/xi
 def GEV_cum_dens(x, mu, sigma, xi):
     return np.exp(-(1 + xi*(x - mu)/sigma)**(-1.0/xi))
 
+def GEV_dens(x, mu, sigma, xi):
+    1.0/sigma*(1 + xi*(x - mu)/sigma)**(-1.0/xi - 1)*np.exp(-(1 + xi*(x - mu)/sigma)**(-1.0/xi))
+
+
 gevs = [GEV_cum_dens(x, mu, sigma, xi) for x in bins]
 # plt.plot(bins, gevs, 'y')
 # plt.plot(bins, cum_dens, 'b.')
@@ -130,6 +134,7 @@ def full_inverse_GEV(q, mu2, sigma2, xi):
     return ((-np.log(q))**(-xi))/sigma2 + mu2
 q_bins = np.asarray([full_inverse_GEV(q, mu2, sigma2, xi) for q in cum_dens])
 ax2.plot(q_bins, bins, 'b.', markersize=8)
+#ax2.plot(q_bins[q_bins > 0.99][0], bins[q_bins > 0.99][0], 'g.', markersize=10)
 ax2.plot([min(q_bins), max(q_bins)], [min(q_bins), max(q_bins)], color=orange, linewidth=2.0)
 ax2.set_xlabel(r'Backup quantile [GWh]', fontsize=18)
 ax2.set_ylabel(r'Backup quantile [GWh]', fontsize=18)

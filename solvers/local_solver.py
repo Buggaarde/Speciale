@@ -291,7 +291,7 @@ def local_solver(Graph, verbose = 0):
                 
             # -- Step 2 --
             _step2AddBackupConstraint(Graph, step) # instead of minimizing the sum of backups
-            _step2AddFlowConstraints(Graph)
+            _step2AddFlowConstraints(Graph, step)
             step2Obj = _step2GetObj(Graph)
             ntwk.setObjective(step2Obj)
             ntwk.optimize()

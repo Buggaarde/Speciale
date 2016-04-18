@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#! /usr/bin/env python2
 import numpy as np
 import gurobipy as gb
 import networkx as nx
@@ -12,7 +12,7 @@ def timing(f):
         result = f(*args, **kwargs)
         te = timeit.default_timer()
 
-        print 'time to run %r: %f sec' % (f.__name__, (te - ts))
+        print ('time to run %r: %f sec' % (f.__name__, (te - ts)))
         return result
     return timed
 
@@ -249,11 +249,11 @@ def sync_solver(Graph, verbose = 0):
             The string you want to be displayed above all the variables and constraints
             in order to be able to tell apart all the information.
         """
-        print message
+        print(message)
         for var in ntwk.getVars():
-            print var
+            print(var)
         for constr in ntwk.getConstrs():
-            print constr
+            print(constr)
         print
     
     totalSteps = len(Graph.node[0]['Mismatch'])
@@ -285,11 +285,11 @@ def sync_solver(Graph, verbose = 0):
             ntwk.setObjective(step2Obj)
             ntwk.optimize()
             _AddFlowsToGraph(Graph, step)
-            
+            # If anything goes wrong, write to file 
             if ntwk.status != gb.GRB.OPTIMAL:
-                ntwk.computeIIS()
-                ntwk.write('model.ilp')
-                print 'Wrote to model.ilp'
+                ntwk.computeIIS()           # The most common error is that some constraints
+                ntwk.write('model.ilp')     # are mutually exclusive, and computing IIS will
+                print('Wrote to model.ilp') # will tell which constraints are the problem.
         else:
             # -- Step 1 --
             _step1UpdateMismatchLoad(Graph, step)
@@ -302,23 +302,24 @@ def sync_solver(Graph, verbose = 0):
             ntwk.setObjective(step2Obj)
             ntwk.optimize()
             _AddFlowsToGraph(Graph, step)
+            # If anything goes wrong, write to file 
             if ntwk.status != gb.GRB.OPTIMAL:
-                ntwk.computeIIS()
-                ntwk.write('model.ilp')
-                print 'Wrote to model.ilp'
+                ntwk.computeIIS()           # The most common error is that some constraints
+                ntwk.write('model.ilp')     # are mutually exclusive, and computing IIS will
+                print('Wrote to model.ilp') # will tell which constraints are the problem.
         
     if verbose == 1:
         for step in xrange(len(Graph.node[0]['Mismatch'])):
-            print '-------------STEP %d-------------' % step
+            print ('-------------STEP %d-------------' % step)
             for node in Graph.nodes():
-                print 'NODE %d' % node
-                print 'mismatch: ' + str(Graph.node[node]['Mismatch'][step])
-                print 'balance: ' + str(Graph.node[node]['Balance'][step])
-                print 'injection pattern: ' + str(Graph.node[node]['Injection Pattern'][step])
+                print ('NODE %d' % node)
+                print ('mismatch: ' + str(Graph.node[node]['Mismatch'][step]))
+                print ('balance: ' + str(Graph.node[node]['Balance'][step]))
+                print ('injection pattern: ' + str(Graph.node[node]['Injection Pattern'][step]))
                 
             print
             for(m, n) in Graph.edges_iter():
-                print 'flow %d->%d: ' % (m, n) + str(Graph[m][n]['flow'][step])      
+                print ('flow %d->%d: ' % (m, n) + str(Graph[m][n]['flow'][step]))      
                 
 
 if __name__ == '__main__':

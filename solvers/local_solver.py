@@ -168,6 +168,10 @@ def local_solver(Graph, verbose = 0):
         for node in Graph.nodes_iter(): # Find the sum of mismatches
             backupSum.add(ntwk.getVarByName('back%d' % node))
             backupTargetValue += Graph.node[node]['Mismatch'][step]
+        # If there is a net positive mismatch in the system, the constraint
+        # instead becomes 0.
+        if backupTargetValue > 0:
+            backupTargetValue = 0
             
         if step == 0: # Add constraint to the Gurobi model
             ntwk.addConstr(backupSum == backupTargetValue,
@@ -335,22 +339,12 @@ def local_solver(Graph, verbose = 0):
 if __name__ == '__main__':
     """
     The mismatches are randomly chosen from a normal distribution, in the example below.
-
-    Since the local solver is undefined for networks with a positive total energy,
-    the distribtion is shifted 0.25 towards the negative in order to reduce the risk
-    of that happening. Even if the network still ends up with a positive total, a small
-    for-loop corrects if necessary.
     """
+    
     ntwk = nx.powerlaw_cluster_graph(5, 3, 0.2)
     steps = 5
     for node in ntwk.nodes():
-        ntwk.node[node]['Mismatch'] = np.random.randn(steps) - 0.25
+        ntwk.node[node]['Mismatch'] = np.random.randn(steps)
         ntwk.node[node]['Load'] = np.ones(steps)
-
-    # Adjusts the mismatch of node 0 to make the total negative, if need be.
-    for step in xrange(steps):
-        totMis = sum(ntwk.node[node]['Mismatch'][step] for node in ntwk.nodes())
-        if totMis > 0:
-            ntwk.node[0]['Mismatch'][step] -= totMis*1.1
 
     local_solver(ntwk, verbose=1)

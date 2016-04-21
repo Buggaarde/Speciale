@@ -17,8 +17,14 @@ def timing(f):
     return timed
 
 @timing
-def local_solver(Graph, verbose = 0):
+def local_solver(energy_network, verbose = 0):
     
+    Graph = energy_network      # Copies energy_network to Graph such that
+                                # it is possible to return Graph without
+                                # modifying energy_network, allowing 
+                                # multiple solvers to be used on the
+                                # same network.
+
     def _step1AddFlowVars(Graph):
         """
         Adding flow variables to the gurobi model. 
@@ -277,14 +283,17 @@ def local_solver(Graph, verbose = 0):
 
     totalSteps = len(Graph.node[0]['Mismatch'])
     for step in xrange(totalSteps):
-        if step == 0:
+        if step == 0:  # This distinction is made because adding
+                       # variables to the gurobi model is expensive
+                       # and therefore we only want to do it for
+                       # the first time step.
             # -- Setting up the gurobi model --
             ntwk = gb.Model('Network')
             # ntwk.params.DualReductions = 0 # Makes the solver specifiy
                                            # whether error is unbound or infeasible
             ntwk.params.OutputFlag = 0     # Tells Gurobi to shut up 
             # -- Giving infinity a better name --
-            inf = gb.GRB.INFINITY
+            inf = gb.GRB.INFINITY # This is used inside the helper-functions
 
             # -- Step 1 --
             _step1AddFlowVars(Graph)
@@ -307,7 +316,9 @@ def local_solver(Graph, verbose = 0):
                 ntwk.computeIIS()
                 ntwk.write('model.ilp')
                 print 'Wrote to model.ilp'
-        else:
+        else: # The first step is over, so we can instead just update
+              # all the values, instead of removing and re-adding
+              # gurobi constraints.
             # -- Step 1 --
             _step1UpdateMismatchLoad(Graph, step)
             
@@ -335,16 +346,19 @@ def local_solver(Graph, verbose = 0):
             for(m, n) in Graph.edges_iter():
                 print 'flow %d->%d: ' % (m, n) + str(Graph[m][n]['flow'][step])      
 
+    return Graph
 
 if __name__ == '__main__':
     """
     The mismatches are randomly chosen from a normal distribution, in the example below.
-    """
     
+    The loads in this basic example are chosen to be 1 in order to quickly be able to
+    verify the results.
+    """
     ntwk = nx.powerlaw_cluster_graph(5, 3, 0.2)
     steps = 5
     for node in ntwk.nodes():
         ntwk.node[node]['Mismatch'] = np.random.randn(steps)
         ntwk.node[node]['Load'] = np.ones(steps)
 
-    local_solver(ntwk, verbose=1)
+    solved_ntwk = local_solver(ntwk, verbose=1)

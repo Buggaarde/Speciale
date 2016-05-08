@@ -19,11 +19,11 @@ def timing(f):
 @timing
 def local_solver(energy_network, verbose = 0):
     
-    Graph = energy_network      # Copies energy_network to Graph such that
-                                # it is possible to return Graph without
-                                # modifying energy_network, allowing 
-                                # multiple solvers to be used on the
-                                # same network.
+    Graph = energy_network.copy()      # Copies energy_network to Graph such that
+                                       # it is possible to return Graph without
+                                       # modifying energy_network, allowing 
+                                       # multiple solvers to be used on the
+                                       # same network.
 
     def _step1AddFlowVars(Graph):
         """
@@ -49,7 +49,7 @@ def local_solver(energy_network, verbose = 0):
 
         # -- Initializing the 'flow' atribute of the edges to be 0 --
         for (m, n) in Graph.edges_iter():
-            Graph[m][n]['flow'] = np.zeros(len(Graph.node[0]['Mismatch']))
+            Graph[m][n]['Flow'] = np.zeros(len(Graph.node[0]['Mismatch']))
         
     def _step1AddBalMisInjLoadVars(Graph):
         """
